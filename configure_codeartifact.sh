@@ -33,6 +33,8 @@ if [[ -z "$CODEARTIFACT_AUTH_TOKEN" ]]; then
     exit 1
 fi
 
+echo "🔑 Authorization token retrieved."
+
 # === LOGIN TO PIP (For tools that may use pip under the hood) ===
 if command -v pip &> /dev/null; then
     echo "🔌 Logging in to pip..."
@@ -47,46 +49,51 @@ fi
 # === SET REPO URL ===
 export CODEARTIFACT_REPO_URL="https://$DOMAIN-$ACCOUNT_ID.d.codeartifact.$AWS_REGION.amazonaws.com/pypi/$REPOSITORY/simple/"
 
-echo "🔑 Authorization token retrieved."
 echo "📦 CodeArtifact repository URL: $CODEARTIFACT_REPO_URL"
 
+if command -v poetry &> /dev/null; then
+    export POETRY_HTTP_BASIC_CODEARTIFACT_USERNAME=aws
+    export POETRY_HTTP_BASIC_CODEARTIFACT_PASSWORD="$CODEARTIFACT_AUTH_TOKEN"
+    poetry source add codeartifact $CODEARTIFACT_REPO_URL --priority primary
+    echo "✅ poetry credentials set up successfully."
+fi
+
+if command -v uv &> /dev/null; then
+    export UV_INDEX_CODEARTIFACT_USERNAME=aws
+    export UV_INDEX_CODEARTIFACT_PASSWORD="$CODEARTIFACT_AUTH_TOKEN"
+    
+    # Create authenticated URL for uv
+    export UV_AUTHENTICATED_URL="https://aws:$CODEARTIFACT_AUTH_TOKEN@$DOMAIN-$ACCOUNT_ID.d.codeartifact.$AWS_REGION.amazonaws.com/pypi/$REPOSITORY/simple/"
+    
+    echo "✅ uv credentials set up successfully."
+fi
+
 # === DISPLAY INSTALLATION COMMANDS ===
-echo ""
-echo "📥 CodeArtifact repository configured successfully!"
 echo ""
 echo "🛠️  Detected tools and install instructions:"
 
 if command -v pip &> /dev/null; then
     echo ""
     echo "📌 pip:"
-    echo "   pip install divi  # (already configured via aws codeartifact login)"
-    echo "   # If the above fails, try:"
-    echo "   pip install --extra-index-url $CODEARTIFACT_REPO_URL --extra-index-url https://pypi.org/simple/ divi"
+    echo "   pip install --index-url \$CODEARTIFACT_REPO_URL divi"
 fi
 
 if command -v poetry &> /dev/null; then
     echo ""
     echo "📌 poetry:"
-    echo "   poetry source add codeartifact $CODEARTIFACT_REPO_URL || true"
-    echo "   poetry add divi"
+    echo "   poetry add --source codeartifact divi"
 fi
 
 if command -v uv &> /dev/null; then
     echo ""
     echo "📌 uv:"
-    echo "   uv add --extra-index-url $CODEARTIFACT_REPO_URL --extra-index-url https://pypi.org/simple/ divi"
+    echo "   uv add --default-index \$UV_AUTHENTICATED_URL divi"
 fi
 
 if command -v pipenv &> /dev/null; then
     echo ""
     echo "📌 pipenv:"
-    echo "   pipenv install --extra-index-url $CODEARTIFACT_REPO_URL --extra-index-url https://pypi.org/simple/ divi"
-fi
-
-if command -v conda &> /dev/null || command -v mamba &> /dev/null; then
-    echo ""
-    echo "📌 conda/mamba (via pip fallback):"
-    echo "   pip install --extra-index-url $CODEARTIFACT_REPO_URL --extra-index-url https://pypi.org/simple/ divi"
+    echo "   PIP_INDEX_URL=\$CODEARTIFACT_REPO_URL pipenv install divi"
 fi
 
 echo ""
